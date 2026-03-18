@@ -8,7 +8,7 @@ def run_eda_visualization(target_room='ROOM_0001'):
     print(f"📊 [{target_room}] 데이터 시각화(EDA) 시작...")
 
     # 1. DB 연결 및 데이터 추출 (Extract from DB)
-    db_path = './data/soundscape.db'
+    db_path = '../data/soundscape.db'
     if not os.path.exists(db_path):
         print("❌ DB 파일을 찾을 수 없습니다. 전처리 코드를 먼저 실행해주세요.")
         return
