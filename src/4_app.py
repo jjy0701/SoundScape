@@ -8,13 +8,13 @@ import joblib
 import os
 
 # ------------------------------------------------
-# 1. AI 아키텍처 정의
+# 1. 2세대 AI 아키텍처 정의 (입력 8개)
 # ------------------------------------------------
 class SoundscapeMLP(nn.Module):
     def __init__(self):
         super(SoundscapeMLP, self).__init__()
         self.net = nn.Sequential(
-            nn.Linear(7, 64),
+            nn.Linear(8, 64), # 💡 7에서 8로 변경됨!
             nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.Dropout(0.1),
@@ -50,9 +50,9 @@ def load_models_and_scalers():
 # 3. Streamlit UI 및 렌더링 로직
 # ------------------------------------------------
 def main():
-    st.set_page_config(page_title="무한 스피커 시뮬레이터", layout="wide")
-    st.title("🎧 대리 모델 기반 무한 스피커 음향 대시보드")
-    st.markdown("원하는 만큼 스피커를 추가하고 배치하여 복합적인 음압 분포를 실시간으로 설계하세요.")
+    st.set_page_config(page_title="무한 스피커 & 재질 시뮬레이터", layout="wide")
+    st.title("🎧 2세대 AI: 다중 스피커 및 방 재질 실시간 시뮬레이터")
+    st.markdown("방의 크기와 스피커 위치뿐만 아니라, **방의 재질(흡음률)**에 따른 음압 변화를 실시간으로 확인하세요.")
 
     try:
         model, scaler_X, scaler_y = load_models_and_scalers()
@@ -60,14 +60,12 @@ def main():
         st.error(f"모델 로드 실패: {e}")
         return
 
-    # --- 💡 세션 상태(Session State) 초기화 ---
-    # 사용자가 스피커를 추가/삭제해도 정보가 날아가지 않도록 기억 공간을 만듭니다.
+    # 세션 상태 초기화 (무한 스피커용)
     if 'speakers' not in st.session_state:
-        st.session_state.speakers = [{'id': 1, 'x': 5.0, 'y': 5.0}] # 기본 스피커 1개
+        st.session_state.speakers = [{'id': 1, 'x': 5.0, 'y': 5.0}]
     if 'next_id' not in st.session_state:
-        st.session_state.next_id = 2 # 다음 스피커에 부여할 고유 번호
+        st.session_state.next_id = 2 
 
-    # 스피커 추가 함수
     def add_speaker():
         st.session_state.speakers.append({
             'id': st.session_state.next_id, 
@@ -76,40 +74,38 @@ def main():
         })
         st.session_state.next_id += 1
 
-    # 스피커 삭제 함수
     def remove_speaker(spk_id):
         st.session_state.speakers = [s for s in st.session_state.speakers if s['id'] != spk_id]
 
     # --- 사이드바 UI ---
     with st.sidebar:
-        st.header("⚙️ 공간 설정")
+        st.header("⚙️ 공간 및 재질 설정")
         room_width = st.slider("방 가로 길이 (m)", 5.0, 20.0, 15.0, 0.5)
         room_length = st.slider("방 세로 길이 (m)", 5.0, 20.0, 10.0, 0.5)
+        
+        # 💡 [핵심] 재질(흡음률) 슬라이더 추가
+        st.subheader("🧱 벽면 재질 (흡음률)")
+        absorption = st.slider(
+            "0.1(목욕탕/콘크리트) ~ 0.9(녹음실/스펀지)", 
+            min_value=0.1, max_value=0.9, value=0.2, step=0.1
+        )
         
         st.markdown("---")
         st.header("🔊 스피커 관리")
         
-        # 스피커 추가 버튼
         if st.button("➕ 새 스피커 추가", use_container_width=True):
             add_speaker()
 
         st.markdown("---")
-        
-        # 동적으로 생성된 스피커 목록 UI 출력
-        for i, spk in enumerate(st.session_state.speakers):
+        for spk in st.session_state.speakers:
             with st.expander(f"스피커 {spk['id']} 설정", expanded=True):
-                # 방 크기가 줄어들면 스피커 위치도 방 안에 맞게 자동 조정되도록 최대값 제한
                 max_x = max(0.5, float(room_width - 0.5))
                 max_y = max(0.5, float(room_length - 0.5))
-                
-                # 고유 Key를 부여하여 슬라이더 충돌 방지
                 spk['x'] = st.slider("X 좌표", 0.5, max_x, min(spk['x'], max_x), 0.1, key=f"x_{spk['id']}")
                 spk['y'] = st.slider("Y 좌표", 0.5, max_y, min(spk['y'], max_y), 0.1, key=f"y_{spk['id']}")
-                
-                # 삭제 버튼
                 if st.button("🗑️ 이 스피커 삭제", key=f"del_{spk['id']}"):
                     remove_speaker(spk['id'])
-                    st.rerun() # 삭제 후 즉시 화면 새로고침
+                    st.rerun() 
 
     # --- 메인 화면: 추론 및 시각화 ---
     resolution = 0.5 
@@ -120,40 +116,43 @@ def main():
     flatten_x = X_grid.flatten()
     flatten_y = Y_grid.flatten()
     
-    # 총 에너지를 누적할 빈 배열 생성 (스피커가 0개면 소리도 0)
     total_energy = np.zeros_like(flatten_x, dtype=np.float64)
 
-    # 생성된 모든 스피커에 대해 각각 AI 추론 실행 후 에너지 합산
     with torch.no_grad():
         for spk in st.session_state.speakers:
             dist = np.sqrt((spk['x'] - flatten_x)**2 + (spk['y'] - flatten_y)**2)
-            feat = np.column_stack((np.full_like(flatten_x, room_width), np.full_like(flatten_x, room_length),
-                                    np.full_like(flatten_x, spk['x']), np.full_like(flatten_x, spk['y']),
-                                    flatten_x, flatten_y, dist))
             
-            # 1. 스케일링 -> 2. 모델 예측 -> 3. dB로 복구
+            # 💡 [핵심] 입력 특징에 absorption(흡음률) 배열 추가! (총 8개)
+            feat = np.column_stack((
+                np.full_like(flatten_x, room_width),
+                np.full_like(flatten_x, room_length),
+                np.full_like(flatten_x, spk['x']),
+                np.full_like(flatten_x, spk['y']),
+                flatten_x,
+                flatten_y,
+                dist,
+                np.full_like(flatten_x, absorption)
+            ))
+            
             tensor_feat = torch.tensor(scaler_X.transform(feat), dtype=torch.float32)
             pred_scaled = model(tensor_feat).numpy()
             pred_db = scaler_y.inverse_transform(pred_scaled).flatten()
             
-            # 4. 물리 법칙: dB를 순수 선형 에너지로 변환하여 누적 합산
             energy = 10 ** (pred_db / 10.0)
             total_energy += energy
 
     # 시각화 로직
     fig, ax = plt.subplots(figsize=(10, 8))
     
-    # 스피커가 하나라도 있을 때만 히트맵 계산
     if len(st.session_state.speakers) > 0:
-        # 합산된 총 에너지를 다시 사람이 듣는 dB 단위로 변환
         final_db = 10 * np.log10(total_energy + 1e-12)
         heatmap_data = final_db.reshape(X_grid.shape)
         
+        # vmin, vmax를 고정하여 흡음률에 따른 밝기 변화를 직관적으로 비교할 수 있게 함
         sns.heatmap(heatmap_data, ax=ax, cmap="magma", 
                     xticklabels=np.round(x_coords, 1), 
                     yticklabels=np.round(y_coords, 1))
     else:
-        # 스피커가 없으면 검은색 빈 화면 출력
         ax.set_facecolor('black')
         ax.set_xlim(0, len(x_coords))
         ax.set_ylim(0, len(y_coords))
@@ -161,13 +160,11 @@ def main():
                 color="white", ha='center', va='center', fontsize=20)
     
     ax.invert_yaxis() 
-    ax.set_title(f"Dynamic SPL (dB) Distribution\nRoom: {room_width}m x {room_length}m | Active Speakers: {len(st.session_state.speakers)}", fontsize=16)
+    ax.set_title(f"Dynamic SPL Distribution | Absorption: {absorption}\nRoom: {room_width}m x {room_length}m | Active Speakers: {len(st.session_state.speakers)}", fontsize=16)
     ax.set_xlabel("Width (X) [m]")
     ax.set_ylabel("Length (Y) [m]")
 
-    # 화면에 스피커 위치(마커) 찍기
     for spk in st.session_state.speakers:
-        # 마커의 색상을 다르게 할 수도 있지만 가독성을 위해 통일하고 번호를 매김
         ax.plot(spk['x'] / resolution, spk['y'] / resolution, marker='*', color='cyan', markersize=15)
         ax.text(spk['x'] / resolution, (spk['y'] / resolution) + 0.5, f"S{spk['id']}", color='cyan', fontsize=12, ha='center')
 
