@@ -1,0 +1,14 @@
+# 가상환경 무시
+venv/
+.venv/
+env/
+
+# 대용량 데이터 폴더 무시
+data/raw/
+data/processed_soundscape/
+*.csv
+*.parquet
+
+# 하지만 학습된 모델(뇌)과 번역기는 올려야 함 (중요!)
+# data 폴더 전체를 무시하되, models 폴더만 예외로 설정
+!data/models/
