@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.pytest_cache
+.python-version
+venv/
+.env
+.env.*
+
+# Python virtual environments
+venv/
+**/venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# FastAPI / backend data & model output
+backend/data/
+backend/data_pra_v3/
+backend/data_v1/
+backend/data_v2/
+backend/data/processed_soundscape/
+backend/data/processed_v3/
+backend/data/models/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Build outputs
+*.egg-info/
+*.eggs/
+build/
+dist/
+
+# Environment files
+*.env
+*.env.local
+*.env.*.local
+
+# PyTorch / numpy artifacts
+*.pth
+*.pt
+*.npy
+*.npz
+
+# Misc
+*.sqlite3
+*.db
